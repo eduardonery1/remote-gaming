@@ -1,4 +1,3 @@
-
 import asyncio
 import pygame
 import json
@@ -12,14 +11,30 @@ async def send_gamepad_data(channel):
     # Initialize gamepad
     pygame.init()
     pygame.joystick.init()
-    joystick = pygame.joystick.Joystick(0)
+    num_controllers = pygame.joystick.get_count()
+    if num_controllers > 0:
+        for i in range(num_controllers):
+            print(f"{i+1}: {pygame.joystick.Joystick(i).get_name()}")
+        
+        idx = None
+        while True:
+            try:
+                idx = int(input("Select joystick number: "))
+            except Exception:
+                print("Select a valid number!")
+            else:
+                break
+
+        joystick = pygame.joystick.Joystick(idx - 1)
     joystick.init()
 
     while True:
         pygame.event.pump()
+        hats = [joystick.get_hat(i) for i in range(joystick.get_numhats())]
         buttons = [joystick.get_button(i) for i in range(joystick.get_numbuttons())]
         axes = [joystick.get_axis(i) for i in range(joystick.get_numaxes())]
-        msg = json.dumps({"buttons": buttons, "axes": axes})
+        msg = json.dumps({"buttons": buttons, "axes": axes, "hats": hats})
+        print(msg)
         channel.send(msg)
         await asyncio.sleep(0.01)  # Send data at ~100Hz
 
