@@ -7,9 +7,8 @@ from pydantic import BaseModel, ValidationError
 from typing import List, Dict
 from aiortc import RTCPeerConnection, RTCSessionDescription
 
-#logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, filename="log-recv.txt")
 SIGNALING_SERVER = "http://localhost:8080"
-PEER_ID = "sabrina"
 
 class ControllerState(BaseModel, ABC):
     axes: List[float]
@@ -84,7 +83,8 @@ async def send_signaling_message(session, endpoint, data):
 async def get_signaling_message(session, peer_id):
     url = f"{SIGNALING_SERVER}/offer/{peer_id}"
     async with session.get(url) as resp:
-        return await resp.json()
+        res_json = await resp.json()
+        return res_json, resp.status
 
 
 async def main():
@@ -106,10 +106,14 @@ async def main():
                 raise e
 
             gamepad.update(state)
+    
+    peer_id = input("Enter the friend code: ")
 
     async with aiohttp.ClientSession() as session:
         # Wait for offer
-        offer = await get_signaling_message(session, PEER_ID)
+        offer, status = await get_signaling_message(session, peer_id)
+        if status == 404:
+            raise Exception("Friend code not found.")
         await pc.setRemoteDescription(RTCSessionDescription(offer["offer"], "offer"))
         print("offer received.")
 
@@ -117,13 +121,12 @@ async def main():
         answer = await pc.createAnswer()
         await pc.setLocalDescription(answer)
         await send_signaling_message(session, "answer", {
-            "peer_id": PEER_ID,
+            "peer_id": peer_id,
             "answer": pc.localDescription.sdp
         })
         print("answer sent.")
         
-    print("Current signaling state:", pc.signalingState, "senders:", pc.getSenders())
-    print("Waiting events...")
+    print("Waiting gamepad inputs...")
     while True:
         await asyncio.sleep(1)
 

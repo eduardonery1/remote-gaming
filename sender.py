@@ -1,11 +1,12 @@
 import asyncio
 import pygame
 import json
+import logging
 from aiortc import RTCPeerConnection, RTCSessionDescription
 import aiohttp
 
+logging.basicConfig(level=logging.INFO, filename="log-sender.txt")
 SIGNALING_SERVER = "http://localhost:8080"
-PEER_ID = "sabrina"
 
 async def send_gamepad_data(channel):
     # Initialize gamepad
@@ -46,7 +47,8 @@ async def send_signaling_message(session, endpoint, data):
 async def get_signaling_message(session, peer_id):
     url = f"{SIGNALING_SERVER}/answer/{peer_id}"
     async with session.get(url) as resp:
-        return await resp.json()
+        res_json = await resp.json()
+        return res_json, resp.status
 
 async def main():
     # Create WebRTC peer connection
@@ -63,16 +65,16 @@ async def main():
         # Create and send offer
         offer = await pc.createOffer()
         await pc.setLocalDescription(offer)
-        await send_signaling_message(session, "offer", {
-            "peer_id": PEER_ID,
+        res = await send_signaling_message(session, "offer", {
             "offer": pc.localDescription.sdp
         })
-
+        peer_id = res["peer_id"]
+        print("Your code is: '"+peer_id+"'\nShare with your friend." )
         # Receive answer
-        answer = await get_signaling_message(session, PEER_ID)
-        await pc.setRemoteDescription(RTCSessionDescription(answer["answer"], "answer"))
-        # Send gamepad data
-    print("Sending gamepad data...")
+        res_ans, res_status = await get_signaling_message(session, peer_id)
+        if res_status == 404:
+            raise Exception("Failed answer not found!.")
+        await pc.setRemoteDescription(RTCSessionDescription(res_ans["answer"], "answer"))
 
     while True:
         await asyncio.sleep(0.01)
